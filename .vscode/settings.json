@@ -1,0 +1,17 @@
+{
+    "files.associations": {
+        "tuple": "cpp",
+        "type_traits": "cpp",
+        "vector": "cpp",
+        "iosfwd": "cpp",
+        "random": "cpp",
+        "barrier": "cpp",
+        "chrono": "cpp",
+        "latch": "cpp",
+        "limits": "cpp",
+        "semaphore": "cpp",
+        "valarray": "cpp",
+        "algorithm": "cpp",
+        "iostream": "cpp"
+    }
+}
