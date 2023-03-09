@@ -4,7 +4,7 @@ using namespace std;
 using ll = long long;
 using vi = vector<int>;
 using vvi = vector<vi>;
-using vll = vector<long long>;
+using vll = vector<ll>;
 using trip = tuple<int,int,int>;
 
 struct Solver {
@@ -23,7 +23,7 @@ struct Solver {
     }
 
     void solve() {
-        if (n * k < 1e7) {
+        if (n * k < 1e9) {
             dp_solve();
         } else {
             lds_solve();
@@ -88,7 +88,7 @@ struct Solver {
         vi used(n);
         vll cvalue(n + 1);
         vll cspace(n + 1);
-        long long mn = 0;
+        ll mn = 0;
         int space = 0;
         for (int i = 1; i <= n; i++) {
             auto [v, w, ind] = temp[i-1];
@@ -131,10 +131,10 @@ struct Solver {
 
         vi ans(n), cur(n);
         int iters = 0;
-        long long best = mn;
+        ll best = mn;
         int opt = 1;
-        function<long long(int, ll, int)> dfs;
-        dfs = [&](int child, ll score, int room) -> long long {
+        function<ll(int, ll, int)> dfs;
+        dfs = [&](int child, ll score, int room) -> ll {
             iters++;
             auto [v, w, ind] = temp[child];
             if (room < 0) return -1LL;
@@ -150,7 +150,7 @@ struct Solver {
             int used_v = -1, unused_v = -1;
             double used_est = estimate(score + v, room - w, child + 1);
             double unused_est = estimate(score, room, child + 1);
-            long long used_s = 0, unused_s = 0;
+            ll used_s = 0, unused_s = 0;
             if (used[child]) {
                 if (used_est > best) {
                     used_s = dfs(child + 1, score + v, room - w);
