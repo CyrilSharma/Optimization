@@ -12,6 +12,7 @@
         "semaphore": "cpp",
         "valarray": "cpp",
         "algorithm": "cpp",
-        "iostream": "cpp"
+        "iostream": "cpp",
+        "unordered_set": "cpp"
     }
 }
