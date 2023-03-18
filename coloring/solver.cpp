@@ -1,9 +1,11 @@
 #include <bits/stdc++.h>
 using namespace std;
+using namespace std::chrono;
 
 using vi = vector<int>;
 using vvi = vector<vi>;
 struct Solver {
+    time_point<high_resolution_clock> begin;
     int n, e;
     vi degree;
     vvi graph;
@@ -23,140 +25,175 @@ struct Solver {
     }
 
     void solve() {
-        int max_degree = -1;
-        for (int i = 0; i < n; i++) {
-            max_degree = max(max_degree, degree[i]);
-        }
+        begin = high_resolution_clock::now();
+        int max_degree = *max_element(degree.begin(), degree.end());
+        int prev_best = 1e9;
         vi prev(n), color(n);
         for (int i = min(max_degree + 1, n); i >= 1; i--) {
-            bool legal = solve(color, i);
-            if (!legal) {
-                cout<<(i + 1)<<" "<<1<<endl;
+            int status = solve(color, i);
+            if (status < 0) {
+                cout<<(prev_best)<<" "<<(status == -1)<<endl;
                 for (int j = 0; j < n; j++) {
                     cout<<(prev[j] - 1)<<" ";
                 }
                 return;
             }
             prev = color;
+            prev_best = status;
             color.assign(n, 0);
+            i = status;
         }
     }
 
-    struct state {
-        vi &color;
-        vector<map<int,int>> &illegal;
-        int node;
-        int start;
-        int used;
+    struct delta {
+        vector<int> del_color;
+        vector<pair<int,int>> del_legal;
+        int node, start, used;
     };
 
+    /* We're not updating the state wrong - 
+     * all of our results were feasible,
+     * yet we wrongly concloud they are optimal...
+     */
     int solve(vi &color, int cmax) {
-        // cout<<"CMAX: "<<cmax<<endl;
-        int start = 1, used = 0;
-        vector<map<int, int>> illegal(n);
-        stack<state> states;
-        int node = -1;
-        while (true) {
-            /* find best node */
-            if (node == -1) {
-                int bestD = -1, bestIL = -1;
-                for (int i = 0; i < n; i++) {
-                    bool flag = false;
-                    if (color[i]) {
-                        flag = false;
-                    } else if ((int) illegal[i].size() != bestIL) {
-                        flag = (int) illegal[i].size() > bestIL;
-                    } else if (degree[i] != bestD) {
-                        flag = degree[i] > bestD;
-                    }
-                    if (flag) {
-                        bestIL = illegal.size();
-                        bestD = degree[i];
-                        node = i;
-                    }
+        int start = 1, node = -1, used = 0, prev_used = 0;
+        bool should_compute = true;
+        vector<set<int>> legal(n);
+        for (int i = 0; i < n; i++) {
+            for (int c = 1; c <= cmax; c++) {
+                legal[i].insert(c);
+            }
+        }
+        vector<pair<int,int>> del_legal;
+        vector<int> del_color;
+        stack<delta> deltas;
+
+        auto find_best = [&]() {
+            int ind = -1, bestD = -1, bestL = 1e9;
+            for (int i = 0; i < n; i++) {
+                if (color[i]) continue;
+                bool flag = false;
+                if ((int) legal[i].size() != bestL) {
+                    flag = (int) legal[i].size() < bestL;
+                } else if (degree[i] != bestD) {
+                    flag = degree[i] > bestD;
                 }
-                /* no nodes remaining. solution is feasible */
+                if (flag) {
+                    bestL = legal[i].size();
+                    bestD = degree[i];
+                    ind = i;
+                }
+            }
+            return ind;
+        };
+
+        auto backtrack = [&]() {
+            delta d = deltas.top();
+            for (auto ind: d.del_color) {
+                assert(color[ind]);
+                color[ind] = 0;
+            }
+
+            for (auto [nbr, c]: d.del_legal) {
+                assert(!legal[nbr].count(c));
+                legal[nbr].insert(c);
+            }
+
+            node = d.node;
+            start = d.start;
+            used = d.used;
+            should_compute = false;
+            deltas.pop();
+        };
+
+        while (true) {
+            /* check for timeout. */
+            auto cur = high_resolution_clock::now(); 
+            if (duration_cast<milliseconds>(cur - begin).count() >= 5000) {
+                return -2;
+            }
+            if (should_compute) {
+                node = find_best();
                 if (node == -1) {
-                    return 1;
+                    return used;
                 }
             }
 
             /* choose a color */
-            bool feasible = false;
-            for (int c = start; c <= min(used + 1, cmax); c++) {
-                if (illegal[node].count(c)) continue;
-                feasible = true;
-                color[node] = c;
-                state s = {color, illegal, node, c + 1, used};
-                states.push(s);
-                if (c == used + 1) {
-                    used++;
-                }
-                break;
+            auto ptr = legal[node].lower_bound(start);
+            if (ptr == legal[node].end()) {
+                if (deltas.empty()) break;
+                backtrack();
+                continue;
             }
+            int chosen = *ptr; 
+            if (chosen == used + 1) {
+                used++;
+            }
+            
+            prev_used = used;
+            del_color.resize(0);
+            del_legal.resize(0);
 
-            /* add branching effects */
+            /* branching effects */
             for (int nbr: graph[node]) {
-                if (color[nbr] > 0 &&
-                    color[nbr] == color[node]) {
-                    feasible = false;
-                    break;
-                }
-                illegal[nbr][color[node]] = 1;
+                if (!legal[nbr].count(chosen)) continue;
+                legal[nbr].erase(chosen);
+                del_legal.push_back({nbr, chosen});
             }
+            color[node] = chosen;
+            del_color.push_back(node);
 
-            /* update state */
-            while (feasible) {
-                bool updated = false;
-                for (int i = 0; i < n; i++) {
-                    if (color[i]) continue;
-                    if ((int) illegal[i].size() == cmax) {
-                        feasible = false;
-                        break;
-                      /* 1 option left */
-                    } else if ((int) illegal[i].size() == cmax - 1) {
-                        for (int c = 1; c <= min(used + 1, cmax); c++) {
-                            if (illegal[i].count(c)) continue;
-                            color[i] = c;
-                            if (c == used + 1) {
-                                used++;
-                            }
-                            break; 
+            /* propogation */
+            vi visited(n);
+            queue<int> q;
+            q.push(node);
+            bool feasible = true;
+            while (feasible && !q.empty()) {
+                int cur = q.front(); q.pop();
+                if (color[cur]) continue;
+                if ((int) legal[cur].size() == 0) {
+                    feasible = false;
+                } else if ((int) legal[cur].size() == 1) {
+                    color[cur] = *legal[cur].begin();
+                    if (color[cur] == used + 1) {
+                        used++;
+                    }
+                    del_color.push_back(cur);
+                    for (int nbr: graph[cur]) {
+                        if (color[nbr] &&
+                            color[nbr] == color[cur]) {
+                            feasible = false;
+                            break;
                         }
-                        for (int nbr: graph[i]) {
-                            if (color[nbr] > 0 &&
-                                color[nbr] == color[i]) {
-                                feasible = false;
-                                break;
-                            }
-                            illegal[nbr][color[i]] = 1;
+                        if (color[nbr]) continue;
+                        if (!legal[nbr].count(color[cur])) continue;
+                        legal[nbr].erase(color[cur]);
+                        del_legal.push_back({nbr, color[cur]});
+                        if ((int) legal[nbr].size() == 1) {
+                            if (visited[nbr]) continue;
+                            visited[nbr] = 1;
+                            q.push(nbr);
+                        } else if ((int) legal[nbr].size() == 0) {
+                            feasible = false;
+                            break;
                         }
-                        updated = true;
                     }
                 }
-                if (!updated) break;
             }
+
+            delta d = {del_color, del_legal, node, chosen + 1, prev_used};
+            deltas.push(d);
             if (feasible) {
-                node = -1;
                 start = 1;
+                should_compute = true;
                 continue;
             }
 
-            /* backtrack if infeasible */
-            if (!states.empty()) {
-                state s = states.top();
-                states.pop();
-
-                color = s.color;
-                illegal = s.illegal;
-                node = s.node;
-                start = s.start;
-                used = s.used;
-            } else {
-                break;
-            }
+            if (deltas.empty()) break;
+            backtrack();
         }
-        return 0;
+        return -1;
     }
 };
 
