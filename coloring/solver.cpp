@@ -201,3 +201,6 @@ int main() {
     Solver s = Solver();
     s.solve();
 }
+/* This can be improved potentially a lot if the all-different constraint
+ * and clique detection is implemented.
+ */
