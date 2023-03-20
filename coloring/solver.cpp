@@ -1,4 +1,5 @@
 #include <bits/stdc++.h>
+#include <stdlib.h>
 using namespace std;
 using namespace std::chrono;
 
@@ -57,67 +58,74 @@ struct Solver {
      */
     int solve(vi &color, int cmax) {
         int start = 1, node = -1, used = 0, prev_used = 0;
-        bool should_compute = true;
         vector<set<int>> legal(n);
-        for (int i = 0; i < n; i++) {
-            for (int c = 1; c <= cmax; c++) {
-                legal[i].insert(c);
-            }
-        }
         vector<pair<int,int>> del_legal;
         vector<int> del_color;
         stack<delta> deltas;
 
-        auto find_best = [&]() {
-            int ind = -1, bestD = -1, bestL = 1e9;
-            for (int i = 0; i < n; i++) {
-                if (color[i]) continue;
-                bool flag = false;
-                if ((int) legal[i].size() != bestL) {
-                    flag = (int) legal[i].size() < bestL;
-                } else if (degree[i] != bestD) {
-                    flag = degree[i] > bestD;
-                }
-                if (flag) {
-                    bestL = legal[i].size();
-                    bestD = degree[i];
-                    ind = i;
-                }
+        auto cmp = [&](int a, int b) {
+            if (legal[a].size() != legal[b].size()) {
+                return legal[a].size() < legal[b].size();
             }
-            return ind;
+            if (degree[a] != degree[b]) {
+                return degree[a] > degree[b];
+            }
+            return a < b;
         };
+        set<int, decltype(cmp)> nodes(cmp);
+
+        for (int i = 0; i < n; i++) {
+            for (int c = 1; c <= cmax; c++) {
+                legal[i].insert(c);
+            }
+            nodes.insert(i);
+        }
 
         auto backtrack = [&]() {
             delta d = deltas.top();
             for (auto ind: d.del_color) {
                 assert(color[ind]);
+                assert(!nodes.count(ind));
                 color[ind] = 0;
+                nodes.insert(ind);
             }
 
             for (auto [nbr, c]: d.del_legal) {
                 assert(!legal[nbr].count(c));
+                nodes.erase(nbr);
                 legal[nbr].insert(c);
+                nodes.insert(nbr);
             }
 
             node = d.node;
             start = d.start;
             used = d.used;
-            should_compute = false;
             deltas.pop();
         };
 
         while (true) {
-            /* check for timeout. */
-            auto cur = high_resolution_clock::now(); 
-            if (duration_cast<milliseconds>(cur - begin).count() >= 5000) {
-                return -2;
-            }
-            if (should_compute) {
-                node = find_best();
-                if (node == -1) {
-                    return used;
+            /* cout<<"COLOR: ";
+            for (int i = 0; i < n; i++) {
+                if (color[i]) {
+                    printf("%.2d ", color[i]);
+                } else {
+                    printf("\033[0;31m");
+                    printf("%.2d ", 0);
+                    printf("\033[0m");
                 }
             }
+            cout<<endl; */
+            /* check for timeout. */
+            auto cur = high_resolution_clock::now(); 
+            if (duration_cast<milliseconds>(cur - begin).count() >= 20000) {
+                return -2;
+            }
+
+            if (nodes.size() == 0) {
+                return used;
+            }
+            node = *nodes.begin();
+            assert(!color[node]);
 
             /* choose a color */
             auto ptr = legal[node].lower_bound(start);
@@ -137,11 +145,17 @@ struct Solver {
 
             /* branching effects */
             for (int nbr: graph[node]) {
+                if (color[nbr]) continue;
                 if (!legal[nbr].count(chosen)) continue;
+                assert(nodes.count(nbr));
+                nodes.erase(nbr);
                 legal[nbr].erase(chosen);
+                nodes.insert(nbr);
                 del_legal.push_back({nbr, chosen});
             }
             color[node] = chosen;
+            assert(nodes.count(node));
+            nodes.erase(node);
             del_color.push_back(node);
 
             /* propogation */
@@ -159,6 +173,8 @@ struct Solver {
                     if (color[cur] == used + 1) {
                         used++;
                     }
+                    assert(nodes.count(cur));
+                    nodes.erase(cur);
                     del_color.push_back(cur);
                     for (int nbr: graph[cur]) {
                         if (color[nbr] &&
@@ -168,7 +184,10 @@ struct Solver {
                         }
                         if (color[nbr]) continue;
                         if (!legal[nbr].count(color[cur])) continue;
+                        assert(nodes.count(nbr));
+                        nodes.erase(nbr);
                         legal[nbr].erase(color[cur]);
+                        nodes.insert(nbr);
                         del_legal.push_back({nbr, color[cur]});
                         if ((int) legal[nbr].size() == 1) {
                             if (visited[nbr]) continue;
@@ -183,10 +202,14 @@ struct Solver {
             }
 
             delta d = {del_color, del_legal, node, chosen + 1, prev_used};
+            /* cout<<"CHANGED: ";
+            for (auto thing: del_color) {
+                cout<<thing<<" ";
+            }
+            cout<<endl; */
             deltas.push(d);
             if (feasible) {
                 start = 1;
-                should_compute = true;
                 continue;
             }
 
