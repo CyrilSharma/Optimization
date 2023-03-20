@@ -117,7 +117,7 @@ struct Solver {
             cout<<endl; */
             /* check for timeout. */
             auto cur = high_resolution_clock::now(); 
-            if (duration_cast<milliseconds>(cur - begin).count() >= 20000) {
+            if (duration_cast<milliseconds>(cur - begin).count() >= 5000) {
                 return -2;
             }
 
@@ -144,6 +144,7 @@ struct Solver {
             del_legal.resize(0);
 
             /* branching effects */
+            queue<int> q;
             for (int nbr: graph[node]) {
                 if (color[nbr]) continue;
                 if (!legal[nbr].count(chosen)) continue;
@@ -151,6 +152,7 @@ struct Solver {
                 nodes.erase(nbr);
                 legal[nbr].erase(chosen);
                 nodes.insert(nbr);
+                q.push(nbr);
                 del_legal.push_back({nbr, chosen});
             }
             color[node] = chosen;
@@ -160,15 +162,14 @@ struct Solver {
 
             /* propogation */
             vi visited(n);
-            queue<int> q;
-            q.push(node);
             bool feasible = true;
             while (feasible && !q.empty()) {
                 int cur = q.front(); q.pop();
                 if (color[cur]) continue;
                 if ((int) legal[cur].size() == 0) {
                     feasible = false;
-                } else if ((int) legal[cur].size() == 1) {
+                } else if ((int) legal[cur].size() == 1 ||
+                    *legal[cur].begin() > used) {
                     color[cur] = *legal[cur].begin();
                     if (color[cur] == used + 1) {
                         used++;
@@ -189,7 +190,8 @@ struct Solver {
                         legal[nbr].erase(color[cur]);
                         nodes.insert(nbr);
                         del_legal.push_back({nbr, color[cur]});
-                        if ((int) legal[nbr].size() == 1) {
+                        if ((int) legal[nbr].size() == 1 ||
+                            *legal[cur].begin() > used) {
                             if (visited[nbr]) continue;
                             visited[nbr] = 1;
                             q.push(nbr);

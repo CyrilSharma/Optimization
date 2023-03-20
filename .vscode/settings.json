@@ -35,6 +35,7 @@
         "unordered_map": "cpp",
         "ranges": "cpp",
         "stacktrace": "cpp",
-        "ios": "cpp"
+        "ios": "cpp",
+        "forward_list": "cpp"
     }
 }
