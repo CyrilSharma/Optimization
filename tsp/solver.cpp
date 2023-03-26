@@ -29,7 +29,7 @@ struct Solver {
             auto [x, y] = points[i];
             for (int j = 0; j < n; j++) {
                 auto [nx, ny] = points[j];
-                dists[i][j] = sqrt((1.0*(x-nx)*(x-nx)) + (1.0*(y-ny)*(y-ny)));
+                dists[i][j] = (1.0*(x-nx)*(x-nx)) + (1.0*(y-ny)*(y-ny));
             }
         }
     }
@@ -98,53 +98,66 @@ struct Solver {
         for (int i = 0; i < n; i++) {
             int cur = p[i];
             int next = p[(i + 1)%n];
-            score += dists[cur][next];
+            score += sqrt(dists[cur][next]);
             tree.ins(cur, i);
         }
 
         // Is this a good amount?
-        for (int i = 0; i < n * 100; i++) {
+        for (int i = 0; i < n * 10; i++) {
             // Select a random indices within the range [0, n-1]
-            int index1 = uniform_int_distribution<int>(0, n-1)(rng);
-            int node1 = tree.get(index1);
+            int index = uniform_int_distribution<int>(0, n-1)(rng);
+            int node = tree.get(index);
 
             // Find some close neighbors
-            vector<int> nbrs = knn.find(points[node1]);
-            int node2 = -1, index2 = -1;
-            if (nbrs.size() <= 1) {
-                index2 = uniform_int_distribution<int>(0, n-1)(rng);
-                node2 = tree.get(index2);
-            } else {
-                index2 = nbrs[uniform_int_distribution<int>(0, nbrs.size()-1)(rng)];
-                node2 = tree.get(index2);
+            double best_dif = 0;
+            int best_index1 = -1, best_node2 = -1;
+            int best_index2 = -1, best_node1_next = -1;
+            vector<int> nbrs = knn.find(points[node]);
+            for (int j = 0; j < max((int)nbrs.size(), 1); j++) {
+                int index1 = index, node1 = node;
+                int index2 = -1, node2 = -1;
+                if (nbrs.size() <= 1) {
+                    index2 = uniform_int_distribution<int>(0, n-1)(rng);
+                    node2 = tree.get(index2);
+                } else {
+                    index2 = nbrs[j];
+                    node2 = tree.get(index2);
+                }
+
+                // Ensure that index1 < index2
+                if (index1 > index2) {
+                    swap(index1, index2);
+                    swap(node1, node2);
+                }
+
+                // If the difference between the two indices is less than or equal to 1, skip this iteration
+                if ((n + index2 - index1) % n <= 1) continue;
+
+                // Find the next nodes.
+                int node1_next = tree.get((index1 + 1) % n);
+                int node2_next = tree.get((index2 + 1) % n);
+
+                // Calculate the change in score if we were to swap the positions of the two nodes
+                auto change = sqrt(dists[node1_next][node2_next]) + sqrt(dists[node1][node2]);
+                auto orig = sqrt(dists[node1][node1_next]) + sqrt(dists[node2][node2_next]);
+                auto dif = change - orig;
+                if (dif < best_dif) {
+                    best_dif = dif;
+                    best_index1 = index1;
+                    best_node2 = node2;
+                    best_index2 = index2;
+                    best_node1_next = node1_next;
+                }
             }
-
-            // Ensure that index1 < index2
-            if (index1 > index2) {
-                swap(index1, index2);
-                swap(node1, node2);
-            }
-
-            // If the difference between the two indices is less than or equal to 1, skip this iteration
-            if ((n + index2 - index1) % n <= 1) continue;
-
-            // Find the next nodes.
-            int node1_next = tree.get((index1 + 1) % n);
-            int node2_next = tree.get((index2 + 1) % n);
-
-            // Calculate the change in score if we were to swap the positions of the two nodes
-            auto change = (dists[node1_next][node2_next] + dists[node1][node2]);
-            auto orig = (dists[node1][node1_next] + dists[node2][node2_next]);
-            auto dif = change - orig;
 
             // If the change in score is negative, update the tree and the score
-            if (dif >= 0) continue;
-            tree.set(node2, index1 + 1);
-            tree.set(node1_next, index2);
-            if (index1 + 2 < index2 - 1) {
-                tree.reverse(index1 + 2, index2 - 1);
+            if (best_dif >= 0) continue;
+            tree.set(best_node2, best_index1 + 1);
+            tree.set(best_node1_next, best_index2);
+            if (best_index1 + 2 < best_index2 - 1) {
+                tree.reverse(best_index1 + 2, best_index2 - 1);
             }
-            score += dif;
+            score += best_dif;
         }
         // save final permutation
         for (int i = 0; i < n; i++) {
