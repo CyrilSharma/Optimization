@@ -36,6 +36,8 @@
         "ranges": "cpp",
         "stacktrace": "cpp",
         "ios": "cpp",
-        "forward_list": "cpp"
+        "forward_list": "cpp",
+        "*.tcc": "cpp",
+        "variant": "cpp"
     }
 }
