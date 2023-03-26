@@ -1,6 +1,6 @@
 #include <bits/stdc++.h>
 #include "Treap.h"
-#include "KNN.h"
+#include "KDTree.h"
 #include <random>
 using namespace std;
 using namespace std::chrono;
@@ -9,8 +9,7 @@ struct Solver {
     int n;
     mt19937 rng;
     vector<pair<double,double>> points;
-    vector<vector<double>> dists;
-    KNN knn;
+    KDTree kdtree;
 
     Solver() { 
         cin >> n;
@@ -18,20 +17,15 @@ struct Solver {
             double u, v; cin >> u >> v;
             points.push_back({u, v});
         }
-        knn = KNN(points);
-        compute_distances();
+        kdtree = KDTree(points);
         rng = mt19937(69420);
     }
 
-    void compute_distances() {
-        dists = vector<vector<double>>(n, vector<double>(n));
-        for (int i = 0; i < n; i++) {
-            auto [x, y] = points[i];
-            for (int j = 0; j < n; j++) {
-                auto [nx, ny] = points[j];
-                dists[i][j] = (1.0*(x-nx)*(x-nx)) + (1.0*(y-ny)*(y-ny));
-            }
-        }
+    double dist(int u, int v) {
+        auto a = points[u];
+        auto b = points[v];
+        return sqrt((a.first-b.first)*(a.first-b.first) + 
+        (a.second-b.second)*(a.second-b.second));
     }
 
     void solve() {
@@ -40,7 +34,7 @@ struct Solver {
         auto begin = high_resolution_clock::now();
         while (true) {
             auto cur = high_resolution_clock::now();
-            if (duration_cast<milliseconds>(cur - begin).count() >= 1000) {
+            if (duration_cast<milliseconds>(cur - begin).count() >= 5000) {
                 break;
             }
             /* for (int i = 0; i < n; i++) {
@@ -65,27 +59,28 @@ struct Solver {
         int total_visited = 0;
         vector<int> visited(n), permutation(n);
         int current = uniform_int_distribution<int>(0, n-1)(rng);
+        set<int> legal;
+        for (int i = 0; i < n; i++) {
+            legal.insert(i);
+        }
         while (total_visited < n) {
             permutation[total_visited] = current;
             visited[current] = 1;
-            vector<int> nbrs = knn.find(points[current]);
+            legal.erase(current);
+            vector<int> nbrs = kdtree.find(points[current]);
             
             bool updated = false;
             double best = -1;
             for (int i = 0; i < nbrs.size(); i++) {
                 if (visited[nbrs[i]]) continue;
-                if (dists[current][nbrs[i]] < best || best == -1) {
-                    best = dists[current][nbrs[i]];
+                if (dist(current, nbrs[i]) < best || best == -1) {
+                    best = dist(current, nbrs[i]);
                     current = nbrs[i];
                     updated = true;
                 }
             }
             if (!updated) {
-                for (int i = 0; i < n; i++) {
-                    if (visited[i]) continue;
-                    current = i;
-                    break;
-                }
+                current = *legal.begin();
             }
             total_visited++;
         }
@@ -95,34 +90,36 @@ struct Solver {
     double local_search(vector<int> &p) {
         Treap tree;
         double score = 0.0;
+        vector<double> cost(n);
         for (int i = 0; i < n; i++) {
             int cur = p[i];
             int next = p[(i + 1)%n];
-            score += sqrt(dists[cur][next]);
+            cost[cur] += dist(cur, next);
+            cost[next] += dist(cur, next);
+            score += dist(cur, next);
             tree.ins(cur, i);
         }
 
+        double temp = 100;
+        double cooling_rate = 0.03;
         // Is this a good amount?
         for (int i = 0; i < n * 10; i++) {
             // Select a random indices within the range [0, n-1]
-            int index = uniform_int_distribution<int>(0, n-1)(rng);
+            // auto [_, index] = q.top(); q.pop();//uniform_int_distribution<int>(0, n-1)(rng);
+            int index = i % n;
             int node = tree.get(index);
 
             // Find some close neighbors
             double best_dif = 0;
+            bool update = false;
             int best_index1 = -1, best_node2 = -1;
             int best_index2 = -1, best_node1_next = -1;
-            vector<int> nbrs = knn.find(points[node]);
+            vector<int> nbrs = kdtree.find(points[node]);
+            // TODO: resevoir sampling? this is too many...
             for (int j = 0; j < max((int)nbrs.size(), 1); j++) {
                 int index1 = index, node1 = node;
-                int index2 = -1, node2 = -1;
-                if (nbrs.size() <= 1) {
-                    index2 = uniform_int_distribution<int>(0, n-1)(rng);
-                    node2 = tree.get(index2);
-                } else {
-                    index2 = nbrs[j];
-                    node2 = tree.get(index2);
-                }
+                int index2 = nbrs[j];
+                int node2 = tree.get(index2);
 
                 // Ensure that index1 < index2
                 if (index1 > index2) {
@@ -138,10 +135,11 @@ struct Solver {
                 int node2_next = tree.get((index2 + 1) % n);
 
                 // Calculate the change in score if we were to swap the positions of the two nodes
-                auto change = sqrt(dists[node1_next][node2_next]) + sqrt(dists[node1][node2]);
-                auto orig = sqrt(dists[node1][node1_next]) + sqrt(dists[node2][node2_next]);
+                auto change = dist(node1_next, node2_next) + dist(node1, node2);
+                auto orig = dist(node1, node1_next) + dist(node2, node2_next);
                 auto dif = change - orig;
                 if (dif < best_dif) {
+                    update = true;
                     best_dif = dif;
                     best_index1 = index1;
                     best_node2 = node2;
@@ -149,15 +147,20 @@ struct Solver {
                     best_node1_next = node1_next;
                 }
             }
-
-            // If the change in score is negative, update the tree and the score
-            if (best_dif >= 0) continue;
+            if (!update) continue;
+            bool accept = false;
+            if (best_dif < 0) accept = true;
+            if (exp(-best_dif / temp) > uniform_real_distribution<double>(0,1)(rng)) {
+                accept = true;
+            }
+            if (!accept) continue;
             tree.set(best_node2, best_index1 + 1);
             tree.set(best_node1_next, best_index2);
             if (best_index1 + 2 < best_index2 - 1) {
                 tree.reverse(best_index1 + 2, best_index2 - 1);
             }
             score += best_dif;
+            temp *= cooling_rate;
         }
         // save final permutation
         for (int i = 0; i < n; i++) {
@@ -165,20 +168,9 @@ struct Solver {
         }
         return score;
     }
-
-    void test_knn() {
-        int index = 1;
-        printf("Looking for (%f, %f)\n", points[index].first, points[index].second);
-        vector<int> ans = knn.find(points[index]);
-        for (int i: ans) {
-            printf("(%f, %f) -> ", points[i].first, points[i].second);
-        }
-        printf("\n");
-    }
 };
 
 int main() {
     Solver s = Solver();
     s.solve();
-    // s.test_knn();
 }

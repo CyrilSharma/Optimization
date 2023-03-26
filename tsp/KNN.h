@@ -9,7 +9,7 @@ struct KNN {
     vector<Point> points;
     vector<vector<Line>> lines;
     unordered_multimap<int,int> mp;
-    int K = 3;
+    int K = 1;
     mt19937 rng;
     KNN() {}
     KNN(vector<Point> points): points(points) {
@@ -17,23 +17,42 @@ struct KNN {
         build();
     }
 
+    pair<Point, Point> get_min_max(const vector<Point>& points) {
+        Point min_coords(numeric_limits<double>::max(),
+                        numeric_limits<double>::max());
+        Point max_coords(numeric_limits<double>::lowest(),
+                        numeric_limits<double>::lowest());
+
+        for (const auto& p : points) {
+            min_coords.first = min(min_coords.first, p.first);
+            min_coords.second = min(min_coords.second, p.second);
+            max_coords.first = max(max_coords.first, p.first);
+            max_coords.second = max(max_coords.second, p.second);
+        }
+
+        return make_pair(min_coords, max_coords);
+    }
+
     void build() {
+        lines.resize(K);
         int n = points.size();
         int nlines = 0;
         while ((1 << nlines) < n) {
             nlines++;
         }
-        /* number of sets */
-        lines.resize(K);
+        // nlines+=10;
+
+        pair<Point, Point> min_max = get_min_max(points);
+        auto [minX, minY] = min_max.first;
+        auto [maxX, maxY] = min_max.second;
+        uniform_real_distribution<double> distX(minX, maxX);
+        uniform_real_distribution<double> distY(minY, maxY);
         for (int k = 0; k < K; k++) {
             for (int i = 0; i < nlines; i++) {
-                int a = 0, b = 0;
-                while (a == b) {
-                    a = uniform_int_distribution<int>(0, n-1)(rng);
-                    b = uniform_int_distribution<int>(0, n-1)(rng);
-                }
-                if (a > b) swap(a, b);
-                lines[k].push_back({points[a], points[b]});
+                lines[k].push_back({
+                    {distX(rng), distY(rng)},
+                    {distX(rng), distY(rng)}
+                });
             }
         }
 
@@ -46,10 +65,11 @@ struct KNN {
     }
 
     /* normal vector is (y_2 - y_1, -(x_2 - x_1))
-     * P - A => (x - x_1, y - y_2)
+     * P - A => (x - x_1, y - y_1)
      * Dot product and check sign.
      */
     int hash(Point P, int k) {
+        cout<<"("<<P.first<<", "<<P.second<<")"<<endl;
         int hsh = 0;
         for (int i = 0; i < lines[k].size(); i++) {
             Line line = lines[k][i];
@@ -57,8 +77,11 @@ struct KNN {
             Point B = line.second;
             double dot = (P.first - A.first) * (B.second - A.second);
             dot -= (P.second - A.second) * (B.first - A.first);
+            cout<<"DOT: "<<dot<<endl;
             hsh |= (dot >= 0) << i;
+
         }
+        cout<<"HSH: "<<bitset<14>(hsh)<<endl;
         return hsh;
     }
 
