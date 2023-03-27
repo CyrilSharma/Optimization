@@ -38,6 +38,12 @@
         "ios": "cpp",
         "forward_list": "cpp",
         "*.tcc": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "future": "cpp",
+        "istream": "cpp",
+        "memory": "cpp",
+        "functional": "cpp",
+        "utility": "cpp",
+        "*.inc": "cpp"
     }
 }

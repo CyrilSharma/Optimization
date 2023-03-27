@@ -50,6 +50,17 @@ Node* merge(Node* l, Node* r) {
 	}
 }
 
+/* int findIndex(Node* n) {
+    int count = 0;
+    while (node != nullptr) {
+        if (node->parent == nullptr || node == node->parent->right) {
+            count += node->virtual_index + 1; // add 1 for the current node
+        }
+        node = node->parent;
+    }
+    return count - 1; 
+} */
+
 struct Treap {
     Node* tree = 0;
     Treap() {}
