@@ -1,6 +1,6 @@
 using namespace std;
 struct Node {
-	Node *l = 0, *r = 0;
+	Node *l = 0, *r = 0, *p = 0;
 	int val, y, c = 1;
     bool rev = false;
 	Node(int val) : val(val), y(rand()) {}
@@ -26,11 +26,15 @@ pair<Node*, Node*> split(Node* n, int k) {
 		auto pa = split(n->l, k);
 		n->l = pa.second;
 		n->recalc();
+        if (pa.first) pa.first->p = 0;
+        if (pa.second) pa.second->p = n;
 		return {pa.first, n};
 	} else {
 		auto pa = split(n->r, k - cnt(n->l) - 1); // and just "k"
 		n->r = pa.first;
 		n->recalc();
+        if (pa.first) pa.first->p = n;
+        if (pa.second) pa.second->p = 0;
 		return {n, pa.second};
 	}
 }
@@ -41,36 +45,35 @@ Node* merge(Node* l, Node* r) {
 	if (!r) return l;
 	if (l->y > r->y) {
 		l->r = merge(l->r, r);
+        l->r->p = l;
 		l->recalc();
 		return l;
 	} else {
 		r->l = merge(l, r->l);
+        r->l->p = r;
 		r->recalc();
 		return r;
 	}
 }
 
-/* int findIndex(Node* n) {
-    int count = 0;
-    while (node != nullptr) {
-        if (node->parent == nullptr || node == node->parent->right) {
-            count += node->virtual_index + 1; // add 1 for the current node
-        }
-        node = node->parent;
-    }
-    return count - 1; 
-} */
-
 struct Treap {
+    int n;
     Node* tree = 0;
-    Treap() {}
+    vector<Node*> nodes;
+    Treap(vector<int> p) : n(p.size())  {
+        nodes.resize(n);
+        for (int i = 0; i < n; i++) {
+            ins(p[i], i);
+        }
+    }
     void ins(int val, int pos) {
         auto pa = split(tree, pos);
         Node *node = new Node(val);
         tree = merge(merge(pa.first, node), pa.second);
+        nodes[val] = node;
     }
 
-    /* finds index at permuation[pos] */
+    /* gets value at permuation[pos] */
     int get(int pos) {
         Node *t1, *t2, *t3;
         tie(t1, t2) = split(tree, pos);
@@ -78,6 +81,44 @@ struct Treap {
         int ans = t2->val;
         tree = merge(merge(t1, t2), t3);
         return ans;
+    }
+
+    void print() {
+        queue<pair<int,Node *>> q;
+        q.push({0, tree});
+        int clevel = -1;
+        while (!q.empty()) {
+            auto [level, node] = q.front(); q.pop();
+            if (level > clevel) {
+                clevel = level;
+                cout<<endl;
+            }
+            cout<<(node ? node->val : -1);
+            cout<<"--"<<(node ? node->c : -1);
+            for (int i = 0; i < 4; i++) {
+                cout<<" ";
+            }
+            if (node) {
+                q.push({level + 1, node->l});
+                q.push({level + 1, node->r});
+            }
+        }
+    }
+
+    /* finds index S.T permutation[pos] = val */
+    int find(int val) {
+        Node* prev = NULL;
+        Node* cur = nodes[val];
+        int count = 0;
+        while (cur != NULL) {
+            if (prev == NULL || (cur->r && cur->r->val == prev->val)) {
+                count += cnt(cur->l) + 1;
+            }
+            if (cur->rev) count = cur->c - count + 1;
+            prev = cur;
+            cur = cur->p;
+        }
+        return count - 1;
     }
 
     void set(int val, int pos) {

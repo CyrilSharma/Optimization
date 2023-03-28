@@ -1,19 +1,26 @@
 
-typedef pair<double,double> point;
+struct point {
+    double x;
+    double y;
+    int idx;
+};
 // the "hyperplane split", use comparators for all dimensions
-bool cmpx(const point& a, const point& b) {return a.first < b.first;}
-bool cmpy(const point& a, const point& b) {return a.second < b.second;}
+bool cmpx(const point& a, const point& b) {return a.x < b.x;}
+bool cmpy(const point& a, const point& b) {return a.y < b.y;}
 
 struct KDTree {
 	vector<point> tree;
 	int n;
     KDTree() {}
-	KDTree(vector<point> p): tree(p), n(p.size()) {
+	KDTree(vector<pair<double,double>> p) : n(p.size()) {
+        for (int i = 0; i < n; i++) {
+            tree.push_back({p[i].first, p[i].second, i});
+        }
 		build(0, n, false);
 	}
 
 	// k-nearest neighbor query, O(k log(k) log(n)) on average
-	vector<int> find(point P, int k = 10) {
+	vector<int> find(pair<double,double> P, int k = 30) {
         auto [x, y] = P;
 		perform_query(x, y, k, 0, n, false); // recurse
 		vector<int> points;
@@ -39,13 +46,13 @@ struct KDTree {
 	void perform_query(double x, double y, int k, int L, int R, bool dvx) {
 		if (L >= R) return;
 		int M = (L + R) / 2;
-		double dx = x - tree[M].first;
-		double dy = y - tree[M].second;
+		double dx = x - tree[M].x;
+		double dy = y - tree[M].y;
 		double delta = dvx ? dx : dy;
 		double dist = dx * dx + dy * dy;
 		// if point is nearer to the kth farthest, put point in queue
 		if (pq.size() < k || dist < pq.top().first) {
-			pq.push(make_pair(dist, M));
+			pq.push(make_pair(dist, tree[M].idx));
 			if (pq.size() > k) pq.pop(); // keep k elements only
 		}
 		int nearL = L, nearR = M, farL = M + 1, farR = R;
